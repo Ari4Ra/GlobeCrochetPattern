@@ -1,6 +1,10 @@
 import math
 
-#import xarray as xr
+import xarray as xr
+import glob
+import rioxarray
+import sys
+xds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data", engine="rasterio")
 #import gzip
 #import shutil
 
@@ -73,10 +77,9 @@ def coordinatesf(stitchlength, stitchheight, stitchsetback, diameter):
         for i in range(numberofstitches[n]):
             coordinates[n][i]=[-90+(n+i/(numberofstitches[n]))*180*stitchheight/(math.pi*r), -180+i*360/numberofstitches[n]] #Latitude, Longitude
         #print(coordinates[n], "\n")
-
     return coordinates   
 
-#coordinatesf(3, 3, 0, 30) 
+coordinatesf(3, 3, 0, 30) 
 
 
 
