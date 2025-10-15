@@ -4,7 +4,7 @@ import xarray as xr
 import glob
 import rioxarray
 import sys
-xds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data", engine="rasterio")
+#xds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data", engine="rasterio")
 #import gzip
 #import shutil
 
@@ -50,8 +50,8 @@ def coordinatesf(stitchlength, stitchheight, stitchsetback, diameter):
             isdoublestitch[n]=[False]*numberofstitches[n]
             if numberofdoublestitches[n]>0:
                 distancebetweendoublestitches=math.floor(numberofstitches[n]/numberofdoublestitches[n])#including one endpoint
-                error=numberofstitches[n]-distancebetweendoublestitches*numberofdoublestitches[n]
-                print("error=",error)
+                #error=numberofstitches[n]-distancebetweendoublestitches*numberofdoublestitches[n]
+                #print("error=",error)
             for i in range(0,numberofdoublestitches[n]):
                 if n%2==0:
                     isdoublestitch[n][i*distancebetweendoublestitches]=True
