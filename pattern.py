@@ -4,89 +4,6 @@ from pyproj import Transformer
 import xarray as xr
 import glob
 from ipyleaflet import CircleMarker
-import rioxarray
-import sys
-
-#xds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\gm_lc_v3_1_1.tif", engine="rasterio")
-#yds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\gm_lc_v3_1_2.tif", engine="rasterio")
-#zds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\gm_lc_v3_2_1.tif", engine="rasterio")
-#wds = xr.open_dataset("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\gm_lc_v3_2_2.tif", engine="rasterio")
-
-
-
-def coordinatesf(stitchlength, stitchheight, stitchsetback, diameter):
-    diametermm=diameter*10
-    r=diametermm/2
-
-    initialstitches=round(math.pi*diametermm*math.sin(2*stitchheight/diametermm)/stitchlength)
-    numberofrows=math.floor(math.pi*diametermm/(2*stitchheight))
-#numberofrows=15 #test number
-    numberofstitches=[0]*numberofrows
-#numberofstitches[0]=initialstitches
-    numberofdoublestitches=[0]*numberofrows
-#numberofdoublestitches[0]=initialstitches
-    isdoublestitch=[None]*numberofrows
-
-    coordinates=[0]*numberofrows
-    coordinates[0]=[0]*initialstitches
-
-    for n in range(numberofrows):
-        if n< math.floor((numberofrows-1)/2)+1: #Südhalbkugel
-            if n==0:
-                numberofstitches[n]=initialstitches
-                numberofdoublestitches[n]=initialstitches
-                isdoublestitch[n]=[False]*initialstitches
-            elif round(math.pi*diametermm*math.sin(2*(n+1)*stitchheight/diametermm)/stitchlength)>numberofstitches[n-1]+numberofstitches[0]: #verhindern, dass man Maschen verdreifachen muss (in der ersten Reihe), bzw. mehr als die Anfangsmaschenzahl zugenommen wird
-                numberofstitches[n]=numberofstitches[n-1]+initialstitches
-            else:
-                numberofstitches[n]=round(math.pi*diametermm*math.sin(2*(n+1)*stitchheight/diametermm)/stitchlength)
-            numberofdoublestitches[n]=numberofstitches[n]-numberofstitches[n-1]
-            isdoublestitch[n]=[False]*numberofstitches[n]
-            if numberofdoublestitches[n]>0:
-                distancebetweendoublestitches=math.floor(numberofstitches[n]/numberofdoublestitches[n])#including one endpoint
-                #error=numberofstitches[n]-distancebetweendoublestitches*numberofdoublestitches[n]
-                #print("error=",error)
-            for i in range(0,numberofdoublestitches[n]):
-                if n%2==0:
-                    isdoublestitch[n][i*distancebetweendoublestitches]=True
-                else:
-                    isdoublestitch[n][i*distancebetweendoublestitches+math.floor(distancebetweendoublestitches/2)]=True
-        else: #Nordhalbkugel
-            numberofstitches[n]=numberofstitches[numberofrows-n-1]
-            numberofdoublestitches[n]=numberofstitches[n-1]-numberofstitches[n]
-            isdoublestitch[n]=isdoublestitch[numberofrows-n-1]
-        coordinates[n]=[0]*numberofstitches[n]
-
-
-
-#for n in range(numberofrows):
-#    for k in range(0,numberofstitches[n]):
- #       if isdoublestitch[n][k]:
- #           print("X",end="")
-  #      else:
-   #         print("o",end="")
-   # print("\n")
-
-    for n in range(numberofrows):
-        for i in range(numberofstitches[n]):
-            coordinates[n][i]=[-90+(n+i/(numberofstitches[n]))*180*stitchheight/(math.pi*r), -180+i*360/numberofstitches[n]] #Latitude, Longitude
-        #print(coordinates[n], "\n")
-    return coordinates   
-
-
-#def lookup(lat, lon):
- #   transformer = Transformer.from_crs("EPSG:4326", xds.rio.crs, always_xy=True)
-  #  xx, yy = transformer.transform(lon, lat)
-   # if lon <0 and lat>0: #Nordamerika
-    #    return int(xds.sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
-    #elif lon>0 and lat >0: #Eurasien
-     #   return int(yds.sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
-    #elif lon<0 and lat<0: # Südamerika
-    #    return int(zds.sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
-    #elif lon>0 and lat<0: #Australien
-    #    return int(wds.sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
-    #else: #zur Sicherheit, tritt eigentlich nicht ein
-    #    return int(xds.sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
 
 def color(n):
     if n in range(1,6):
@@ -117,7 +34,7 @@ class StitchCoordinates:
         self.r = self.diametermm / 2
         self.initialstitches = round(math.pi * self.diametermm * math.sin(2 * stitchheight / self.diametermm) / stitchlength)
         self.numberofrows = math.floor(math.pi * self.diametermm / (2 * stitchheight))
-        self.numberofstitches=0
+        self.numberofstitches=[]
         self.calculatenumberofstitches()
         self.deg=[]
         self.rad=[]
@@ -128,8 +45,7 @@ class StitchCoordinates:
         nos=[self.initialstitches]
         for n in range(1, self.numberofrows):
             if n < math.floor((self.numberofrows - 1) / 2) + 1:  # southern hemisphere
-                if round(math.pi * self.diametermm * math.sin(2 * (n + 1) * self.stitchheight / self.diametermm) / self.stitchlength) > \
-                     nos[n - 1] + nos[0]:  # no triple increases in the first row
+                if round((math.pi * self.diametermm * math.sin(2 * (n + 1) * self.stitchheight / self.diametermm)+self.stitchsetback) / self.stitchlength) > nos[n - 1] + nos[0]:  # no triple increases in the second row
                     nos.append(nos[n - 1] + nos[0])
                 else:
                     nos.append(round(
@@ -165,7 +81,53 @@ class StitchCoordinates:
                 (i*self.deg[n]/self.numberofstitches[n]+self.sumdegsetback[n])%360-180]) # Latitude, Longitude
         return co
 
-
+    def doublestitches(self):
+        diff=[self.initialstitches]
+        dist=[0]
+        rest=[0]
+        abzu=[1] #1=Zunahme, -1=Abnahme, 0= weder noch
+        ds=[[]]
+        for n in range(1,self.numberofrows):
+            diff.append(abs(self.numberofstitches[n]-self.numberofstitches[n-1]))
+            if (self.numberofstitches[n]-self.numberofstitches[n-1])>0:
+                abzu.append(1)
+            elif (self.numberofstitches[n]-self.numberofstitches[n-1])<0:
+                abzu.append(-1)
+            else:
+                abzu.append(0)
+            if abzu[n]!=0:
+                dist.append(math.floor(self.numberofstitches[n-1]/diff[n]))
+            else:
+                dist.append(self.numberofstitches[n-1])
+            rest.append(self.numberofstitches[n-1]-diff[n]*dist[n])
+            h=[]
+            #print("aaaaaaaaaaaaaaaaa")
+            #print(diff[n])
+            #print(dist[n])
+            #print(rest[n])
+            #print("zzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
+            for i in range(diff[n]):
+                if abzu[n]==1:
+                    if i<rest[n]:
+                        h.extend([0]*dist[n])
+                        h.append(1)
+                    else:
+                        h.extend([0] * (dist[n]-1))
+                        h.append(1)
+                elif abzu[n]==-1:
+                    if i < rest[n]:
+                        h.extend([0] * (dist[n]-1))
+                        h.append(-1)
+                    else:
+                        h.extend([0] * (dist[n] - 2))
+                        h.append(-1)
+                else:
+                    h.extend([0] * (dist[n]))
+            #print(h)
+            shift=math.floor(2*self.numberofstitches[n]/5)
+            h=h[-shift:] + h[:-shift]
+            ds.append(h)
+        return ds
 
 class Loader:
     def __init__(self, path: str):
@@ -180,7 +142,6 @@ class Loader:
                 xx, yy = transformer.transform(lon, lat)
                 return int(self.dss[i].sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
         return None
-
 
 def convert2markers(coordinatenliste, loader):
     markers=[]
@@ -197,3 +158,48 @@ def convert2markers(coordinatenliste, loader):
                 ))
 
     return markers
+
+class PatternGenerator:
+    def __init__(self, loader, stitch_coordinates):
+        self.loader=loader
+        self.st=stitch_coordinates
+    def generate(self):
+        info=self.st.doublestitches()
+        for n in range(len(self.st.doublestitches())):
+            for i in range(len(self.st.doublestitches()[n])):
+                if self.st.doublestitches()[n][i]<=0:
+                    info[n][i]=[info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i]))]
+                else:
+                    info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i])),colorword(self.loader.lookup(*self.st.coordinates()[n][i+1]))]
+        pat=[]
+        for n in range(len(self.st.doublestitches())):
+            w=1
+            pat.append([])
+            for i in range(len(self.st.doublestitches()[n])-1):
+                if info[n][i]==info[n][i+1]:
+                    w=w+1
+                else:
+                    pat[n].append([w," mal ", info[n][i]])
+        return pat
+
+
+
+def colorword(n):
+    if n in range(1,6):
+        return 'green'
+    elif n in range(6,11):
+        return 'olive'
+    elif n in range(11,16):
+        return 'green'
+    elif n==16:
+        return 'dark gray'
+    elif n==17:
+        return 'yellow'
+    elif n==18:
+        return 'light gray'
+    elif n==19:
+        return 'white'
+    elif n==20:
+        return 'blue'
+    else:
+        return 'error'
