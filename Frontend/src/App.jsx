@@ -11,7 +11,7 @@ diametercm:20,
 })
 
 
-const [markers,setMarkers] = useState([1,2])
+const [markers,setMarkers] = useState([])
 const [index, setIndex] = useState(0)
 
 //async function run(){
@@ -46,6 +46,8 @@ function formatMarker(marker) {
     return `${count} × ??? (${c1}${c2 ? " + " + c2 : ""})`;
   });
 }
+
+
 
 
 async function run() {
