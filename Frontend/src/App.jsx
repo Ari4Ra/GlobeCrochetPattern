@@ -1,18 +1,20 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { generate, API } from './api'
 
 
 export default function App(){
 const [params,setParams] = useState({
-stitchlength:3,
-stitchheight:3,
-stitchsetback:0,
-diametercm:20,
+stitchlength:2,
+stitchheight:2,
+stitchsetback:1,
+diametercm:1,
 })
 
 
 const [markers,setMarkers] = useState([])
 const [index, setIndex] = useState(0)
+const [stats, setStats] = useState(null);
+
 
 //async function run(){
 //const result = await generate(params)
@@ -47,6 +49,19 @@ function formatMarker(marker) {
   });
 }
 
+useEffect(() => {
+  function handleKeyDown(e) {
+    if (e.key === "ArrowRight") {
+      setIndex(i => Math.min(i + 1, markers.length - 1));
+    }
+    if (e.key === "ArrowLeft") {
+      setIndex(i => Math.max(i - 1, 0));
+    }
+  }
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [markers]);
 
 
 
@@ -55,8 +70,9 @@ async function run() {
     //console.log("Params:", params);
     const result = await generate(params);
     //console.log("Result from backend:", result);
-    setMarkers(result);
+    setMarkers(result.pattern);
     setIndex(0)
+    setStats(result.statistics);
 }
 
 const current = markers[index]   // das aktuell ausgewählte Element
@@ -85,12 +101,17 @@ return (
             {key}:
             <input
               type="number"
+              type="number"
+              min="0"
+              step="0.1"
               value={params[key]}
               onChange={e=>setParams({...params,[key]:Number(e.target.value)})}
             />
           </label>
         ))}
       </div>
+
+
 
       <button onClick={run} style={{marginTop:20}}>
         Generieren
@@ -135,6 +156,38 @@ return (
           </p>
         </div>
       )}
+{/* Statistik – oben rechts */}
+<div style={{
+  position: "absolute",
+  top: 20,
+  right: 200,
+  background: "white",
+  padding: "10px 15px",
+  border: "1px solid #ccc",
+  borderRadius: 8,
+  maxWidth: 400
+}}>
+  <h3>Statistik</h3>
+
+  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    <thead>
+      <tr>
+        <th style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>Farbe</th>
+        <th style={{ textAlign: "right", borderBottom: "1px solid #ccc" }}>Anzahl</th>
+      </tr>
+    </thead>
+    <tbody>
+      {Object.entries(stats || {}).map(([color, count]) => (
+        <tr key={color}>
+          <td>{color}</td>
+          <td style={{ textAlign: "right" }}>{count}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
+
     </div>
   )
 }

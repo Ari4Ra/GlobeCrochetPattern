@@ -167,41 +167,41 @@ class PatternGenerator:
         return pat
 
     def statistik(self):
-        am=[0]*7
+        am={"green": 0, "olive":0, "dark gray": 0, "yellow":0, "light gray":0, "white":0, "blue":0, "total":0}
         for n in range(len(self.info)):
             for i in range(len(self.info[n])):
                 match self.info[n][i][1]:
                     case "green":
-                        am[0] += 1
+                        am["green"] += 1
                     case "olive":
-                        am[1] += 1
+                        am["olive"] += 1
                     case "dark gray":
-                        am[2] += 1
+                        am["dark gray"] += 1
                     case "yellow":
-                        am[3] += 1
+                        am["yellow"] += 1
                     case "light gray":
-                        am[4] += 1
+                        am["light gray"] += 1
                     case "white":
-                        am[5] += 1
+                        am["white"] += 1
                     case "blue":
-                        am[6] += 1
+                        am["blue"] += 1
                 if self.info[n][i][0]==1:
                     match self.info[n][i][2]:
                         case "green":
-                            am[0] += 1
+                            am["green"] += 1
                         case "olive":
-                            am[1] += 1
+                            am["olive"] += 1
                         case "dark gray":
-                            am[2] += 1
+                            am["dark gray"] += 1
                         case "yellow":
-                            am[3] += 1
+                            am["yellow"] += 1
                         case "light gray":
-                            am[4] += 1
+                            am["light gray"] += 1
                         case "white":
-                            am[5] += 1
+                            am["white"] += 1
                         case "blue":
-                            am[6] += 1
-        am.append(am[0]+am[1]+am[2]+am[3]+am[4]+am[5]+am[6])
+                            am["blue"] += 1
+        am["total"]=(am["green"]+am["olive"]+am["dark gray"]+am["yellow"]+am["light gray"]+am["white"]+am["blue"])
         return am
 
 
@@ -264,7 +264,10 @@ def generate(req: GenerateRequest):
         #coords = st.coordinates()
         #flat = [p for row in coords for p in row]
         #return {"markers": flat}
-        return pattern_generator.generate()
+        return {
+            "pattern": pattern_generator.generate(),
+            "statistics": pattern_generator.statistik()
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
