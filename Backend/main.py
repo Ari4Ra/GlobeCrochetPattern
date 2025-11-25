@@ -111,6 +111,7 @@ class StitchCoordinates:
             ds.append(h)
         return ds
 
+
 class Loader:
     def __init__(self, path: str):
         self.files: list[str] = glob.glob(path)
@@ -130,31 +131,78 @@ class PatternGenerator:
     def __init__(self, loader, stitch_coordinates):
         self.loader = loader
         self.st = stitch_coordinates
-
-    def generate(self):
-        info = self.st.doublestitches()
+        self.info = self.st.doublestitches()
         for n in range(len(self.st.doublestitches())):
             for i in range(len(self.st.doublestitches()[n])):
                 if self.st.doublestitches()[n][i] <= 0:
-                    info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i]))]
+                    self.info[n][i] = [self.info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i]))]
                 else:
-                    info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i])),
+                    self.info[n][i] = [self.info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i])),
                                   colorword(self.loader.lookup(*self.st.coordinates()[n][i + 1]))]
+
+
+    def generate(self):
+        #info = self.st.doublestitches()
+        #for n in range(len(self.st.doublestitches())):
+         #   for i in range(len(self.st.doublestitches()[n])):
+          #      if self.st.doublestitches()[n][i] <= 0:
+             #       info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i]))]
+           ##     else:
+              #      info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i])),
+               #                   colorword(self.loader.lookup(*self.st.coordinates()[n][i + 1]))]
         pat = []
         for n in range(len(self.st.doublestitches())):
             w = 1
             pat.append([])
             for i in range(len(self.st.doublestitches()[n]) - 1):
-                if info[n][i] == info[n][i + 1]:
+                if self.info[n][i] == self.info[n][i + 1]:
                     w = w + 1
                 else:
-                    pat[n].append([w, " mal ", *info[n][i]])
+                    pat[n].append([w, " mal ", *self.info[n][i]])
                     w = 1
                     if i == len(self.st.doublestitches()[n]) - 2:
-                        pat[n].append([1, " mal ", *info[n][i + 1]])
+                        pat[n].append([1, " mal ", *self.info[n][i + 1]])
             if w == len(self.st.doublestitches()[n]):
-                pat[n].append([w, " mal ", *info[n][0]])
+                pat[n].append([w, " mal ", *self.info[n][0]])
         return pat
+
+    def statistik(self):
+        am=[0]*7
+        for n in range(len(self.info)):
+            for i in range(len(self.info[n])):
+                match self.info[n][i][1]:
+                    case "green":
+                        am[0] += 1
+                    case "olive":
+                        am[1] += 1
+                    case "dark gray":
+                        am[2] += 1
+                    case "yellow":
+                        am[3] += 1
+                    case "light gray":
+                        am[4] += 1
+                    case "white":
+                        am[5] += 1
+                    case "blue":
+                        am[6] += 1
+                if self.info[n][i][0]==1:
+                    match self.info[n][i][2]:
+                        case "green":
+                            am[0] += 1
+                        case "olive":
+                            am[1] += 1
+                        case "dark gray":
+                            am[2] += 1
+                        case "yellow":
+                            am[3] += 1
+                        case "light gray":
+                            am[4] += 1
+                        case "white":
+                            am[5] += 1
+                        case "blue":
+                            am[6] += 1
+        am.append(am[0]+am[1]+am[2]+am[3]+am[4]+am[5]+am[6])
+        return am
 
 
 def colorword(n):
