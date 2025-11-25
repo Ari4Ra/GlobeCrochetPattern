@@ -5,6 +5,7 @@ import xarray as xr
 import glob
 #from ipyleaflet import CircleMarker
 import math
+from fastapi.middleware.cors import CORSMiddleware
 
 class StitchCoordinates:
     def __init__(self, stitchlength, stitchheight, stitchsetback, diametercm):
@@ -147,12 +148,12 @@ class PatternGenerator:
                 if info[n][i] == info[n][i + 1]:
                     w = w + 1
                 else:
-                    pat[n].append([w, " mal ", info[n][i]])
+                    pat[n].append([w, " mal ", *info[n][i]])
                     w = 1
                     if i == len(self.st.doublestitches()[n]) - 2:
-                        pat[n].append([1, " mal ", info[n][i + 1]])
+                        pat[n].append([1, " mal ", *info[n][i + 1]])
             if w == len(self.st.doublestitches()[n]):
-                pat[n].append([w, " mal ", info[n][0]])
+                pat[n].append([w, " mal ", *info[n][0]])
         return pat
 
 
@@ -180,20 +181,42 @@ def colorword(n):
 # --- FastAPI Setup ---
 app = FastAPI()
 
+print("Lade TIFF-Daten... (einmalig)")
+GLOBAL_LOADER = Loader("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\*.tif")
+print("Loader geladen!")
+
+# CORS Setup
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class GenerateRequest(BaseModel):
     stitchlength: float
     stitchheight: float
     stitchsetback: float
     diametercm: float
+    #path: str
 
 
 @app.post("/generate")
 def generate(req: GenerateRequest):
     try:
-        st = StitchCoordinates(req.stitchlength, req.stitchheight, req.stitchsetback, req.diametercm)
-        coords = st.coordinates()
-        flat = [p for row in coords for p in row]
-        return {"markers": flat}
+        stitch_coordinates = StitchCoordinates(req.stitchlength, req.stitchheight, req.stitchsetback, req.diametercm)
+        #loader=Loader("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\*.tif")
+        pattern_generator=PatternGenerator(GLOBAL_LOADER, stitch_coordinates)
+        #coords = st.coordinates()
+        #flat = [p for row in coords for p in row]
+        #return {"markers": flat}
+        return pattern_generator.generate()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
