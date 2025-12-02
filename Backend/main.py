@@ -6,6 +6,12 @@ import glob
 #from ipyleaflet import CircleMarker
 import math
 from fastapi.middleware.cors import CORSMiddleware
+import rasterio
+from rasterio.windows import from_bounds, Window, WindowError
+from collections import Counter
+import numba
+import numpy as np
+
 
 class StitchCoordinates:
     def __init__(self, stitchlength, stitchheight, stitchsetback, diametercm):
@@ -112,33 +118,143 @@ class StitchCoordinates:
         return ds
 
 
+@numba.njit
+def majority_numba(arr):
+    """
+    Berechnet den Mehrheitswert eines 1D Integer-Arrays (Masking vorher erledigen).
+    """
+    arr = np.asarray(arr, dtype=np.int32)  # Numba-freundlich
+
+    if arr.size == 0:
+        return -1  # fallback
+
+    min_val = arr[0]
+    max_val = arr[0]
+
+    # Manuelles min/max für Numba
+    for i in range(1, arr.size):
+        if arr[i] < min_val:
+            min_val = arr[i]
+        elif arr[i] > max_val:
+            max_val = arr[i]
+
+    counts = np.zeros(max_val - min_val + 1, dtype=np.int32)
+
+    for i in range(arr.size):
+        counts[arr[i] - min_val] += 1
+
+    idx = 0
+    max_count = counts[0]
+    for i in range(1, counts.size):
+        if counts[i] > max_count:
+            max_count = counts[i]
+            idx = i
+
+    return idx + min_val
+
+# ----------------------
+# Loader Klasse
+# ----------------------
 class Loader:
-    def __init__(self, path: str):
-        self.files: list[str] = glob.glob(path)
-        self.dss: list[xr.Dataset] = [xr.open_dataset(ds, engine="rasterio") for ds in self.files]
-        self.bounds: list[tuple[float,float,float,float]] = [(math.floor(min(ds.x)), math.floor(min(ds.y)),math.ceil( max(ds.x)), math.ceil(max(ds.y))) for ds in self.dss]
+    def __init__(self, path_pattern: str):
+        self.files = glob.glob(path_pattern)
+        self.dss = []
+        self.bounds = []
+        self.transformers = []
 
-    def lookup(self, lat, lon) -> int | None:
-        for i, bound in enumerate(self.bounds):
-            if bound[0]<=lon<=bound[2] and bound[1]<=lat<=bound[3]:
-                transformer = Transformer.from_crs("EPSG:4326", self.dss[i].rio.crs, always_xy=True)
-                xx, yy = transformer.transform(lon, lat)
-                return int(self.dss[i].sel(x=xx, y=yy, method="nearest")["band_data"].values[0])
-        return None
+        for fp in self.files:
+            ds = rasterio.open(fp)
+            arr = ds.read(1, masked=True)  # masked Array
+            self.dss.append({
+                "array": arr,
+                "transform": ds.transform,
+                "crs": ds.crs,
+                "nodata": ds.nodata,
+                "width": ds.width,
+                "height": ds.height,
+                "path": fp
+            })
+            self.bounds.append(ds.bounds)
+            self.transformers.append(Transformer.from_crs("EPSG:4326", ds.crs, always_xy=True))
 
+    # ----------------------
+    # Flache Batch-Methode (für interne Nutzung)
+    # ----------------------
+    def lookup_majority_batch_flat(self, coords, dlat, dlon):
+        results = [None] * len(coords)
+
+        for ds, bounds, transformer in zip(self.dss, self.bounds, self.transformers):
+            inside_indices = [i for i, (lat, lon) in enumerate(coords)
+                              if bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top]
+            if not inside_indices:
+                continue
+
+            lats = np.array([coords[i][0] for i in inside_indices])
+            lons = np.array([coords[i][1] for i in inside_indices])
+
+            min_lat, max_lat = lats.min() - dlat, lats.max() + dlat
+            min_lon, max_lon = lons.min() - dlon, lons.max() + dlon
+
+            xmin, ymin = transformer.transform(min_lon, min_lat)
+            xmax, ymax = transformer.transform(max_lon, max_lat)
+
+            row_min, col_min = rasterio.transform.rowcol(ds["transform"], xmin, ymax)
+            row_max, col_max = rasterio.transform.rowcol(ds["transform"], xmax, ymin)
+
+            row_min = max(0, min(ds["height"] - 1, row_min))
+            row_max = max(0, min(ds["height"] - 1, row_max))
+            col_min = max(0, min(ds["width"] - 1, col_min))
+            col_max = max(0, min(ds["width"] - 1, col_max))
+
+            sub = ds["array"][row_min:row_max + 1, col_min:col_max + 1]
+
+            for idx in inside_indices:
+                lat, lon = coords[idx]
+                r, c = rasterio.transform.rowcol(ds["transform"], lon, lat)
+                r_sub, c_sub = r - row_min, c - col_min
+
+                r0 = max(0, r_sub - int(dlat * 111000 / ds["transform"].a))
+                r1 = min(sub.shape[0] - 1, r_sub + int(dlat * 111000 / ds["transform"].a))
+                c0 = max(0, c_sub - int(dlon * 111000 / ds["transform"].a))
+                c1 = min(sub.shape[1] - 1, c_sub + int(dlon * 111000 / ds["transform"].a))
+
+                patch = sub[r0:r1 + 1, c0:c1 + 1]
+                if patch.mask.all():
+                    results[idx] = None
+                else:
+                    results[idx] = majority_numba(patch.compressed())
+
+        return results
+
+    # ----------------------
+    # Verschachtelte Batch-Methode
+    # ----------------------
+    def lookup_majority_batch_nested(self, coords_nested, dlat, dlon):
+        """
+        coords_nested: Liste von Listen von Koordinaten [[(lat, lon), ...], ...]
+        Gibt die gleiche verschachtelte Struktur zurück mit Mehrheitswerten.
+        """
+        results_nested = []
+        for sublist in coords_nested:
+            sub_results = self.lookup_majority_batch_flat(sublist, dlat, dlon)
+            results_nested.append(sub_results)
+        return results_nested
 
 class PatternGenerator:
     def __init__(self, loader, stitch_coordinates):
         self.loader = loader
         self.st = stitch_coordinates
+        dlat=abs(self.st.coordinates()[0][0][0]-self.st.coordinates()[1][0][0])
+        dlon=abs(self.st.coordinates()[0][0][1]-self.st.coordinates()[0][1][1])
+        farb = self.loader.lookup_majority_batch_nested(self.st.coordinates(), dlat, dlon)
         self.info = self.st.doublestitches()
         for n in range(len(self.st.doublestitches())):
             for i in range(len(self.st.doublestitches()[n])):
                 if self.st.doublestitches()[n][i] <= 0:
-                    self.info[n][i] = [self.info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i]))]
+                    self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
                 else:
-                    self.info[n][i] = [self.info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i])),
-                                  colorword(self.loader.lookup(*self.st.coordinates()[n][i + 1]))]
+                    self.info[n][i] = [self.info[n][i], colorword(farb[n][i]),
+                                  colorword(farb[n][i+1])]
 
 
     def generate(self):
@@ -167,7 +283,7 @@ class PatternGenerator:
         return pat
 
     def statistik(self):
-        am={"green": 0, "olive":0, "dark gray": 0, "yellow":0, "light gray":0, "white":0, "blue":0, "total":0}
+        am={"green": 0, "olive":0, "dark gray": 0, "yellow":0, "light gray":0, "white":0, "blue":0, "sand":0, "total":0}
         for n in range(len(self.info)):
             for i in range(len(self.info[n])):
                 match self.info[n][i][1]:
@@ -185,6 +301,8 @@ class PatternGenerator:
                         am["white"] += 1
                     case "blue":
                         am["blue"] += 1
+                    case "sand":
+                        am["sand"] +=1
                 if self.info[n][i][0]==1:
                     match self.info[n][i][2]:
                         case "green":
@@ -201,17 +319,19 @@ class PatternGenerator:
                             am["white"] += 1
                         case "blue":
                             am["blue"] += 1
-        am["total"]=(am["green"]+am["olive"]+am["dark gray"]+am["yellow"]+am["light gray"]+am["white"]+am["blue"])
+                        case "sand":
+                            am["sand"] +=1
+        am["total"]=(am["green"]+am["olive"]+am["dark gray"]+am["yellow"]+am["light gray"]+am["white"]+am["blue"]+am["sand"])
         return am
 
 
 def colorword(n):
-    if n in range(1, 6):
+    if n in range(1, 7) or n==9 or n in range(11,16):
         return 'green'
-    elif n in range(6, 11):
+    elif n==7 or n==10:
+        return 'sand'
+    elif n==8:
         return 'olive'
-    elif n in range(11, 16):
-        return 'green'
     elif n == 16:
         return 'dark gray'
     elif n == 17:
@@ -252,6 +372,8 @@ class GenerateRequest(BaseModel):
     stitchheight: float
     stitchsetback: float
     diametercm: float
+    lengthoftestyarn: float
+    amountofteststitches: float
     #path: str
 
 
@@ -261,12 +383,19 @@ def generate(req: GenerateRequest):
         stitch_coordinates = StitchCoordinates(req.stitchlength, req.stitchheight, req.stitchsetback, req.diametercm)
         #loader=Loader("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\*.tif")
         pattern_generator=PatternGenerator(GLOBAL_LOADER, stitch_coordinates)
+        ratio=req.lengthoftestyarn/req.amountofteststitches
+        original= pattern_generator.statistik()
+        new_stats = {
+            color: {"count": count, "length": ratio*count}
+            for color, count in original.items()
+        }
+
         #coords = st.coordinates()
         #flat = [p for row in coords for p in row]
         #return {"markers": flat}
         return {
             "pattern": pattern_generator.generate(),
-            "statistics": pattern_generator.statistik()
+            "statistics": new_stats
         }
 
     except Exception as e:
