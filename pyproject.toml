@@ -12,6 +12,7 @@ dependencies = [
     "ipyleaflet>=0.20.0",
     "ipyopenlayers>=0.2.1",
     "notebook>=7.4.7",
+    "numba>=0.62.1",
     "rioxarray>=0.19.0",
     "uvicorn[standard]>=0.38.0",
     "xarray>=2025.9.1",
