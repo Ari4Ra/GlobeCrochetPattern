@@ -8,23 +8,33 @@ from rasterio.windows import from_bounds, Window, WindowError
 import numpy as np
 from collections import Counter
 import rasterio
+
+
 def color(n):
-    if n in range(1,6):
-        return '#11451e'
-    elif n in range(6,11):
-        return '#b9c23c'
-    elif n in range(11,16):
-        return '#11451e'
-    elif n==16:
-        return '#3d3d3b'
-    elif n==17:
-        return '#f2bd35'
-    elif n==18:
-        return '#a7a9ab'
-    elif n==19:
-        return '#ffffff'
-    elif n==20:
-        return '#085099'
+    if n in range(1,6): #forest
+        return '#476e3d'#green
+    elif n in range(6,7): #tree open
+        return '#476e3d'#green #'#615c49'#grünschwarz  #'4c4734'
+    elif n==7: #shrub
+        return '#c99d75'#sand #'#dbf20c'#neongrün#615c49'#grünschwarz'#cc8551' #caramel
+    elif n==8: #herbaceous
+        return '#615c49'#grünschwarz #f6aa48'#'#db291d' #red
+    elif n==9: #herbaceous with sparse tree/shrub
+        return '#476e3d'#green #'#51edeb' #türkis
+    elif n==10: #sparse vegetation
+        return '#c99d75'#sand #5c3305' #braun
+    elif n in range(11,16): #ackerland, sumpf, mangroven
+        return '#476e3d' #grün
+    elif n==16: #steinwüste
+        return '#6e6d75'#mausgrau #'#bcbbc0' #grau
+    elif n==17: #sandwüste
+        return '#f6aa48'#senf #c99d75'#fcd267' #gelb
+    elif n==18: #urban
+        return '#a7a9ab'#unwichtig
+    elif n==19: #snow/ice
+        return '#ffffff' #weiß
+    elif n==20: #water
+        return '#4778ba' #blau
     else:
         return '#000000'
 
@@ -64,7 +74,7 @@ class StitchCoordinates:
         self.stitchsetback = stitchsetback
         self.diametermm = diametercm * 10
         self.r = self.diametermm / 2
-        self.initialstitches = round(math.pi * self.diametermm * math.sin(2 * stitchheight / self.diametermm) / stitchlength)
+        self.initialstitches = round(math.pi * self.diametermm * math.sin(self.stitchheight / self.r) / self.stitchlength)
         self.numberofrows = math.floor(math.pi * self.diametermm / (2 * stitchheight))
         self.numberofstitches=[]
         self.calculatenumberofstitches()
@@ -160,13 +170,6 @@ class StitchCoordinates:
             h=h[-shift:] + h[:-shift]
             ds.append(h)
         return ds
-
-import glob
-import math
-import numpy as np
-import rasterio
-from rasterio.windows import from_bounds
-from pyproj import Transformer, Geod
 
 
 class Loader:
@@ -267,14 +270,15 @@ class Loader:
 
 def convert2markers(coordinatenliste, loader):
     markers=[]
-    for row in coordinatenliste:
-        for stitch in row:
+    col=loader.lookup_majority_batch_nested(coordinatenliste,5,5,5)
+    for i,row in enumerate(coordinatenliste):
+        for j,stitch in enumerate(row):
             markers.append(
                 CircleMarker(
                     location=stitch,
                     radius=2,
                     color="white",
-                    fill_color=str(color(loader.lookup(*stitch))),
+                    fill_color=str(color(col[i][j])),
                     fill_opacity=0.9,
                     weight=0
                 ))
