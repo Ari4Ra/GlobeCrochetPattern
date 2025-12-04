@@ -29,8 +29,8 @@ const [stats, setStats] = useState(null);
 
       if (inc === 0) return `${count} × sc ${c1}`;
       if (inc === 1) {
-        if (!c2 || c2 === c1) return `${count} × dc ${c1}`;
-        return `${count} × dc (${c1} + ${c2})`;
+        if (!c2 || c2 === c1) return `${count} × inc ${c1}`;
+        return `${count} × inc  (${c1} + ${c2})`;
       }
       if (inc === -1) return `${count} × dec ${c1}`;
 
@@ -84,7 +84,7 @@ const [stats, setStats] = useState(null);
      do not sit exactly on top of each other. Measure the setback that occurs in each row in mm. Count the amount of
      stitches, unravel and measure the length of the yarn you needed in cm. Enter the data and klick "GENERATE".
      The pattern and the amount of yarn you need of each color will appear. Here "sc" means single crochet,
-     "dc" means double crochet and "dec" means decrease.
+     "inc" means increase and "dec" means decrease.
     </p>
   </div>
 
