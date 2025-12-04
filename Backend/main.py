@@ -11,6 +11,98 @@ from rasterio.windows import from_bounds, Window, WindowError
 from collections import Counter
 import numba
 import numpy as np
+from rasterio.transform import rowcol
+#import rioxarray
+
+class Loader:
+    def __init__(self, path_pattern: str):
+        """Lädt nur die Metadaten für schnelle Initialisierung."""
+        self.files = glob.glob(path_pattern)
+        self.dss = []
+        self.bounds = []
+
+        for fp in self.files:
+            ds = xr.open_dataset(fp, engine="rasterio")
+            self.dss.append(ds)
+            # Bounds als (minx, miny, maxx, maxy)
+            self.bounds.append((
+                round(float(ds.x.min())),
+                round(float(ds.y.min())),
+                round(float(ds.x.max())),
+                round(float(ds.y.max()))
+            ))
+
+    def lookup(self, lat, lon) -> int | None:
+        for i, bound in enumerate(self.bounds):
+            if bound[0] <= lon <= bound[2] and bound[1] <= lat <= bound[3]:
+                ds = self.dss[i]
+
+                # CRS-sicher
+                if ds.rio.crs is not None and ds.rio.crs.to_epsg() != 4326:
+                    transformer = Transformer.from_crs("EPSG:4326", ds.rio.crs, always_xy=True)
+                    xx, yy = transformer.transform(lon, lat)
+                else:
+                    xx, yy = lon, lat
+
+                try:
+                    val = ds.sel(x=xx, y=yy, method="nearest")["band_data"].values[0]
+                    return int(val)
+                except IndexError:
+                    return None
+        return None
+
+    def lookup_majority_window(self, lat, lon, dlat, dlon, max_samples=10):
+        min_lat, max_lat = lat - dlat, lat + dlat
+        min_lon, max_lon = lon - dlon, lon + dlon
+        for i, bound in enumerate(self.bounds):
+            if bound[0] <= lon <= bound[2] and bound[1] <= lat <= bound[3]:
+                ds = self.dss[i]
+
+                if ds.rio.crs is not None and ds.rio.crs.to_epsg() != 4326:
+                    transformer = Transformer.from_crs("EPSG:4326", ds.rio.crs, always_xy=True)
+                    xmin, ymin = transformer.transform(min_lon, min_lat)
+                    xmax, ymax = transformer.transform(max_lon, max_lat)
+                else:
+                    xmin, ymin = max(min_lon,bound[0]), max(min_lat, bound[1])
+                    xmax, ymax = min(max_lon, bound[2]), min(max_lat, bound[3])
+
+                row_min, col_min = rowcol(ds.rio.transform(), xmin, ymax)
+                row_max, col_max = rowcol(ds.rio.transform(), xmax, ymin)
+
+                row_min = max(0, min(ds.sizes["y"] - 1, row_min))
+                row_max = max(0, min(ds.sizes["y"] - 1, row_max))
+                col_min = max(0, min(ds.sizes["x"] - 1, col_min))
+                col_max = max(0, min(ds.sizes["x"] - 1, col_max))
+
+                patch = ds["band_data"].isel(
+                    y=slice(row_min, row_max + 1),
+                    x=slice(col_min, col_max + 1)
+                ).values
+
+                # Downsampling
+                step_y = max(1, patch.shape[0] // max_samples)
+                step_x = max(1, patch.shape[1] // max_samples)
+                patch_ds = patch[::step_y, ::step_x]
+
+                if patch_ds.size == 0:
+                    return None
+
+                vals, counts = np.unique(patch_ds, return_counts=True)
+                return int(vals[np.argmax(counts)])
+        return None
+
+
+    def lookup_majority_batch_flat(self, coords, dlat, dlon, max_samples=50):
+        results = [None] * len(coords)
+        for idx, (lat, lon) in enumerate(coords):
+            results[idx] = self.lookup_majority_window(lat, lon, dlat, dlon, max_samples)
+        return results
+
+    def lookup_majority_batch_nested(self, coords_nested, dlat, dlon, max_samples=50):
+        results_nested = []
+        for sublist in coords_nested:
+            results_nested.append(self.lookup_majority_batch_flat(sublist, dlat, dlon, max_samples))
+        return results_nested
 
 
 class StitchCoordinates:
@@ -20,7 +112,7 @@ class StitchCoordinates:
         self.stitchsetback = stitchsetback
         self.diametermm = diametercm * 10
         self.r = self.diametermm / 2
-        self.initialstitches = round(math.pi * self.diametermm * math.sin(2 * stitchheight / self.diametermm) / stitchlength)
+        self.initialstitches = round(math.pi * self.diametermm * math.sin(self.stitchheight / self.r) / self.stitchlength)
         self.numberofrows = math.floor(math.pi * self.diametermm / (2 * stitchheight))
         self.numberofstitches=[]
         self.calculatenumberofstitches()
@@ -76,32 +168,36 @@ class StitchCoordinates:
         abzu=[1] #1=Zunahme, -1=Abnahme, 0= weder noch
         ds=[[0]*self.initialstitches]
         for n in range(1,self.numberofrows):
+            #print("n=",n)
             diff.append(abs(self.numberofstitches[n]-self.numberofstitches[n-1]))
+            #print("diff=",diff)
             if (self.numberofstitches[n]-self.numberofstitches[n-1])>0:
                 abzu.append(1)
             elif (self.numberofstitches[n]-self.numberofstitches[n-1])<0:
                 abzu.append(-1)
             else:
                 abzu.append(0)
+            #print("abzu=",abzu)
             if abzu[n]!=0:
                 dist.append(math.floor(self.numberofstitches[n-1]/diff[n]))
             else:
                 dist.append(self.numberofstitches[n-1])
+            #print("dist=",dist)
             rest.append(self.numberofstitches[n-1]-diff[n]*dist[n])
+            #print("rest=",rest)
             h=[]
-            #print("aaaaaaaaaaaaaaaaa")
-            #print(diff[n])
-            #print(dist[n])
-            #print(rest[n])
-            #print("zzzzzzzzzzzzzzzzzzzzzzzzzzzzz")
-            for i in range(diff[n]):
+            for i in range(diff[n]): #es wird pro Durchlauf eine Masche abgenommen oder zugenommen
+                #print("i=",i)
+                #print("diff[n]=",diff[n])
+                #print("dist[n]=",dist[n])
                 if abzu[n]==1:
-                    if i<rest[n]:
+                    if i<rest[n]: #der Rest wird auf die ersten Zunahmen aufgeteilt
                         h.extend([0]*dist[n])
                         h.append(1)
                     else:
                         h.extend([0] * (dist[n]-1))
                         h.append(1)
+                    # Insgesamt werden in der n-ten Reihe diff[n] Increases und rest[n]*dist[n]+ (diff[n]-rest[n])*dist[n] sc gehäkelt. Insgesamt:
                 elif abzu[n]==-1:
                     if i < rest[n]:
                         h.extend([0] * (dist[n]-1))
@@ -109,144 +205,24 @@ class StitchCoordinates:
                     else:
                         h.extend([0] * (dist[n] - 2))
                         h.append(-1)
-                else:
-                    h.extend([0] * (dist[n]))
+            if abzu[n]==0: #falls die Maschenanzahl gleich bleibt
+                h.extend([0] * (dist[n]))
+            #print("n=",n)
             #print(h)
             shift=math.floor(2*self.numberofstitches[n]/5)
             h=h[-shift:] + h[:-shift]
+            #print(h)
             ds.append(h)
         return ds
 
-
-@numba.njit
-def majority_numba(arr):
-    """
-    Berechnet den Mehrheitswert eines 1D Integer-Arrays (Masking vorher erledigen).
-    """
-    arr = np.asarray(arr, dtype=np.int32)  # Numba-freundlich
-
-    if arr.size == 0:
-        return -1  # fallback
-
-    min_val = arr[0]
-    max_val = arr[0]
-
-    # Manuelles min/max für Numba
-    for i in range(1, arr.size):
-        if arr[i] < min_val:
-            min_val = arr[i]
-        elif arr[i] > max_val:
-            max_val = arr[i]
-
-    counts = np.zeros(max_val - min_val + 1, dtype=np.int32)
-
-    for i in range(arr.size):
-        counts[arr[i] - min_val] += 1
-
-    idx = 0
-    max_count = counts[0]
-    for i in range(1, counts.size):
-        if counts[i] > max_count:
-            max_count = counts[i]
-            idx = i
-
-    return idx + min_val
-
-# ----------------------
-# Loader Klasse
-# ----------------------
-class Loader:
-    def __init__(self, path_pattern: str):
-        self.files = glob.glob(path_pattern)
-        self.dss = []
-        self.bounds = []
-        self.transformers = []
-
-        for fp in self.files:
-            ds = rasterio.open(fp)
-            arr = ds.read(1, masked=True)  # masked Array
-            self.dss.append({
-                "array": arr,
-                "transform": ds.transform,
-                "crs": ds.crs,
-                "nodata": ds.nodata,
-                "width": ds.width,
-                "height": ds.height,
-                "path": fp
-            })
-            self.bounds.append(ds.bounds)
-            self.transformers.append(Transformer.from_crs("EPSG:4326", ds.crs, always_xy=True))
-
-    # ----------------------
-    # Flache Batch-Methode (für interne Nutzung)
-    # ----------------------
-    def lookup_majority_batch_flat(self, coords, dlat, dlon):
-        results = [None] * len(coords)
-
-        for ds, bounds, transformer in zip(self.dss, self.bounds, self.transformers):
-            inside_indices = [i for i, (lat, lon) in enumerate(coords)
-                              if bounds.left <= lon <= bounds.right and bounds.bottom <= lat <= bounds.top]
-            if not inside_indices:
-                continue
-
-            lats = np.array([coords[i][0] for i in inside_indices])
-            lons = np.array([coords[i][1] for i in inside_indices])
-
-            min_lat, max_lat = lats.min() - dlat, lats.max() + dlat
-            min_lon, max_lon = lons.min() - dlon, lons.max() + dlon
-
-            xmin, ymin = transformer.transform(min_lon, min_lat)
-            xmax, ymax = transformer.transform(max_lon, max_lat)
-
-            row_min, col_min = rasterio.transform.rowcol(ds["transform"], xmin, ymax)
-            row_max, col_max = rasterio.transform.rowcol(ds["transform"], xmax, ymin)
-
-            row_min = max(0, min(ds["height"] - 1, row_min))
-            row_max = max(0, min(ds["height"] - 1, row_max))
-            col_min = max(0, min(ds["width"] - 1, col_min))
-            col_max = max(0, min(ds["width"] - 1, col_max))
-
-            sub = ds["array"][row_min:row_max + 1, col_min:col_max + 1]
-
-            for idx in inside_indices:
-                lat, lon = coords[idx]
-                r, c = rasterio.transform.rowcol(ds["transform"], lon, lat)
-                r_sub, c_sub = r - row_min, c - col_min
-
-                r0 = max(0, r_sub - int(dlat * 111000 / ds["transform"].a))
-                r1 = min(sub.shape[0] - 1, r_sub + int(dlat * 111000 / ds["transform"].a))
-                c0 = max(0, c_sub - int(dlon * 111000 / ds["transform"].a))
-                c1 = min(sub.shape[1] - 1, c_sub + int(dlon * 111000 / ds["transform"].a))
-
-                patch = sub[r0:r1 + 1, c0:c1 + 1]
-                if patch.mask.all():
-                    results[idx] = None
-                else:
-                    results[idx] = majority_numba(patch.compressed())
-
-        return results
-
-    # ----------------------
-    # Verschachtelte Batch-Methode
-    # ----------------------
-    def lookup_majority_batch_nested(self, coords_nested, dlat, dlon):
-        """
-        coords_nested: Liste von Listen von Koordinaten [[(lat, lon), ...], ...]
-        Gibt die gleiche verschachtelte Struktur zurück mit Mehrheitswerten.
-        """
-        results_nested = []
-        for sublist in coords_nested:
-            sub_results = self.lookup_majority_batch_flat(sublist, dlat, dlon)
-            results_nested.append(sub_results)
-        return results_nested
 
 class PatternGenerator:
     def __init__(self, loader, stitch_coordinates):
         self.loader = loader
         self.st = stitch_coordinates
-        dlat=abs(self.st.coordinates()[0][0][0]-self.st.coordinates()[1][0][0])
-        dlon=abs(self.st.coordinates()[0][0][1]-self.st.coordinates()[0][1][1])
-        farb = self.loader.lookup_majority_batch_nested(self.st.coordinates(), dlat, dlon)
+        dlat=self.st.stitchheight/self.st.r
+        dlon=self.st.stitchlength/self.st.r
+        farb = self.loader.lookup_majority_batch_nested(self.st.coordinates(), dlon, dlat,10)
         self.info = self.st.doublestitches()
         for n in range(len(self.st.doublestitches())):
             for i in range(len(self.st.doublestitches()[n])):
@@ -258,14 +234,6 @@ class PatternGenerator:
 
 
     def generate(self):
-        #info = self.st.doublestitches()
-        #for n in range(len(self.st.doublestitches())):
-         #   for i in range(len(self.st.doublestitches()[n])):
-          #      if self.st.doublestitches()[n][i] <= 0:
-             #       info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i]))]
-           ##     else:
-              #      info[n][i] = [info[n][i], colorword(self.loader.lookup(*self.st.coordinates()[n][i])),
-               #                   colorword(self.loader.lookup(*self.st.coordinates()[n][i + 1]))]
         pat = []
         for n in range(len(self.st.doublestitches())):
             w = 1
@@ -273,13 +241,13 @@ class PatternGenerator:
             for i in range(len(self.st.doublestitches()[n]) - 1):
                 if self.info[n][i] == self.info[n][i + 1]:
                     w = w + 1
+                    if i == len(self.st.doublestitches()[n]) - 2:
+                        pat[n].append([w, " mal ", *self.info[n][i + 1]])
                 else:
                     pat[n].append([w, " mal ", *self.info[n][i]])
                     w = 1
                     if i == len(self.st.doublestitches()[n]) - 2:
                         pat[n].append([1, " mal ", *self.info[n][i + 1]])
-            if w == len(self.st.doublestitches()[n]):
-                pat[n].append([w, " mal ", *self.info[n][0]])
         return pat
 
     def statistik(self):
