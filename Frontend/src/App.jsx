@@ -133,12 +133,27 @@ const [stats, setStats] = useState(null);
               ←
             </button>
 
-            {/* Ausgabe Box */}
-            <pre className="bg-white p-4 rounded max-h-72 overflow-auto whitespace-pre-wrap flex-grow shadow">
-              {formatMarker(current).map((line, i) => (
-                <div key={i}>{line}</div>
-              ))}
-            </pre>
+           {/* Ausgabe Box */}
+<pre className="bg-white p-4 rounded max-h-72 overflow-auto whitespace-pre-wrap flex-grow shadow">
+{formatMarker(current).map((line, i) => {
+// Beispiel: Farbe anhand bestimmter Stichworte setzen
+let color = "black";
+if (line.includes("blue")) color = "#4778ba";
+if (line.includes("yellow")) color = '#f6aa48';
+if (line.includes("green")) color = '#476e3d';
+if (line.includes("sand")) color = '#c99d75';
+if (line.includes("olive")) color = '#615c49'
+if (line.includes("gray")) color = '#6e6d75';
+
+
+return (
+<div key={i} style={{ color }}>{line}</div>
+);
+})}
+</pre>
+
+
+
 
             {/* → Pfeil */}
             <button

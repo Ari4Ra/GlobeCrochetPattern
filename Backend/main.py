@@ -158,7 +158,7 @@ class StitchCoordinates:
             co.append([])
             for i in range(self.numberofstitches[n]):
                 co[n].append([-90 + (n + i / (self.numberofstitches[n])) * 180 * self.stitchheight / (math.pi * self.r),
-                (i*self.deg[n]/self.numberofstitches[n]+self.sumdegsetback[n])%360-180]) # Latitude, Longitude
+                ((self.numberofstitches[n]-1-i)*self.deg[n]/self.numberofstitches[n]+self.sumdegsetback[n])%360-180]) # Latitude, Longitude
         return co
 
     def doublestitches(self):
@@ -220,33 +220,46 @@ class PatternGenerator:
     def __init__(self, loader, stitch_coordinates):
         self.loader = loader
         self.st = stitch_coordinates
-        dlat=self.st.stitchheight/self.st.r
-        dlon=self.st.stitchlength/self.st.r
+        dlat = min(3, (90 / math.pi) * stitch_coordinates.stitchheight / stitch_coordinates.r)
+        dlon = min(3, (90 / math.pi) * stitch_coordinates.stitchlength / stitch_coordinates.r)
         farb = self.loader.lookup_majority_batch_nested(self.st.coordinates(), dlon, dlat,10)
-        self.info = self.st.doublestitches()
+        self.info = [[] for _ in range(self.st.numberofrows)]
         for n in range(len(self.st.doublestitches())):
+            x=[]
+            h=0
             for i in range(len(self.st.doublestitches()[n])):
                 if self.st.doublestitches()[n][i] <= 0:
-                    self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
-                else:
-                    self.info[n][i] = [self.info[n][i], colorword(farb[n][i]),
-                                  colorword(farb[n][i+1])]
+                    #self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
+                    self.info[n].append([self.st.doublestitches()[n][i], colorword(farb[n][h])])
+                    h+=1
+                elif self.st.doublestitches()[n][i]==1:
+                    self.info[n].append([self.st.doublestitches()[n][i], colorword(farb[n][h]),
+                                  colorword(farb[n][h+1])])
+                    h+=2
+                #else:
+                 #   x.append(i)
+                  #  h=0
+            #print(n, "jiofsd", x)
+            #for j in sorted(x, reverse=True):
+                #del self.info[n][j]
+
+
 
 
     def generate(self):
         pat = []
-        for n in range(len(self.st.doublestitches())):
+        for n in range(len(self.info)):
             w = 1
             pat.append([])
-            for i in range(len(self.st.doublestitches()[n]) - 1):
+            for i in range(len(self.info[n]) - 1):
                 if self.info[n][i] == self.info[n][i + 1]:
                     w = w + 1
-                    if i == len(self.st.doublestitches()[n]) - 2:
-                        pat[n].append([w, " mal ", *self.info[n][i + 1]])
+                    if i == len(self.info[n]) - 2:
+                        pat[n].append([w, " mal ", *self.info[n][i]])
                 else:
                     pat[n].append([w, " mal ", *self.info[n][i]])
                     w = 1
-                    if i == len(self.st.doublestitches()[n]) - 2:
+                    if i == len(self.info[n]) - 2:
                         pat[n].append([1, " mal ", *self.info[n][i + 1]])
         return pat
 
@@ -312,6 +325,7 @@ def colorword(n):
         return 'blue'
     else:
         return 'error'
+
 
 
 # --- FastAPI Setup ---
