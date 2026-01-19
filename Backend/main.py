@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from pyproj import Transformer
 import xarray as xr
 import glob
-#from ipyleaflet import CircleMarker
 import math
 from fastapi.middleware.cors import CORSMiddleware
 import rasterio
@@ -12,11 +11,12 @@ from collections import Counter
 import numba
 import numpy as np
 from rasterio.transform import rowcol
-#import rioxarray
+import os
+from fastapi.middleware.cors import CORSMiddleware
+
 
 class Loader:
     def __init__(self, path_pattern: str):
-        """Lädt nur die Metadaten für schnelle Initialisierung."""
         self.files = glob.glob(path_pattern)
         self.dss = []
         self.bounds = []
@@ -24,7 +24,6 @@ class Loader:
         for fp in self.files:
             ds = xr.open_dataset(fp, engine="rasterio")
             self.dss.append(ds)
-            # Bounds als (minx, miny, maxx, maxy)
             self.bounds.append((
                 round(float(ds.x.min())),
                 round(float(ds.y.min())),
@@ -220,8 +219,8 @@ class PatternGenerator:
     def __init__(self, loader, stitch_coordinates):
         self.loader = loader
         self.st = stitch_coordinates
-        dlat = min(3, (90 / math.pi) * stitch_coordinates.stitchheight / stitch_coordinates.r)
-        dlon = min(3, (90 / math.pi) * stitch_coordinates.stitchlength / stitch_coordinates.r)
+        dlat = min(3, (22.5 / math.pi) * stitch_coordinates.stitchheight / stitch_coordinates.r)
+        dlon = min(3, (22.5 / math.pi) * stitch_coordinates.stitchlength / stitch_coordinates.r)
         farb = self.loader.lookup_majority_batch_nested(self.st.coordinates(), dlon, dlat,10)
         self.info = [[] for _ in range(self.st.numberofrows)]
         for n in range(len(self.st.doublestitches())):
@@ -236,12 +235,6 @@ class PatternGenerator:
                     self.info[n].append([self.st.doublestitches()[n][i], colorword(farb[n][h]),
                                   colorword(farb[n][h+1])])
                     h+=2
-                #else:
-                 #   x.append(i)
-                  #  h=0
-            #print(n, "jiofsd", x)
-            #for j in sorted(x, reverse=True):
-                #del self.info[n][j]
 
 
 
@@ -331,14 +324,18 @@ def colorword(n):
 # --- FastAPI Setup ---
 app = FastAPI()
 
+
 print("Lade TIFF-Daten... (einmalig)")
-GLOBAL_LOADER = Loader("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\*.tif")
+DATA_DIR = os.environ.get("DATA_DIR", "/home/ara/Documents/GlobeCrochetPattern/Backend/Data/*.tif")
+GLOBAL_LOADER = Loader(DATA_DIR)
 print("Loader geladen!")
 
 # CORS Setup
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
 ]
 
 app.add_middleware(
