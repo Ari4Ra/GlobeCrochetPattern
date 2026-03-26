@@ -91,16 +91,16 @@ class Loader:
         return None
 
 
-    def lookup_majority_batch_flat(self, coords, dlat, dlon, max_samples=50):
+    def lookup_list_majority_batch_flat(self, coords, dlat, dlon, max_samples=50):
         results = [None] * len(coords)
         for idx, (lat, lon) in enumerate(coords):
             results[idx] = self.lookup_majority_window(lat, lon, dlat, dlon, max_samples)
         return results
 
-    def lookup_majority_batch_nested(self, coords_nested, dlat, dlon, max_samples=50):
+    def lookup_list_majority_batch_nested(self, coords_nested, dlat, dlon, max_samples=50):
         results_nested = []
         for sublist in coords_nested:
-            results_nested.append(self.lookup_majority_batch_flat(sublist, dlat, dlon, max_samples))
+            results_nested.append(self.lookup_list_majority_batch_flat(sublist, dlat, dlon, max_samples))
         return results_nested
 
 
@@ -113,43 +113,40 @@ class StitchCoordinates:
         self.r = self.diametermm / 2
         self.initialstitches = round(math.pi * self.diametermm * math.sin(self.stitchheight / self.r) / self.stitchlength)
         self.numberofrows = math.floor(math.pi * self.diametermm / (2 * stitchheight))
+        self.equator = math.floor((self.numberofrows - 1) / 2)  # indexing starting with 0
         self.numberofstitches=[]
-        self.calculatenumberofstitches()
-        self.deg=[]
-        self.rad=[]
-        self.sumdegsetback=[]
-        self.calculatesetback()
+        self.deg=[] #the difference of each row to a full circle due to setback
+        self.rad=[] #radius of each row
+        self.sumdegsetback=[] # the sum of the setbacks that have accumulated over all previous rows
+        self.calculate()
 
-    def calculatenumberofstitches(self):
+
+
+
+    def calculate(self):
+        rad=[]
         nos=[self.initialstitches]
-        for n in range(1, self.numberofrows):
-            if n < math.floor((self.numberofrows - 1) / 2) + 1:  # southern hemisphere
+        for n in range(0, self.numberofrows):
+            if n==0: #first row, the setback should not be included here
+                rad.append(self.r * math.sin(self.stitchheight / self.r))
+            elif n<self.equator+1: #southern hemisphere
+                rad.append(self.r*math.sin((n+1)*self.stitchheight/self.r))
                 if round((math.pi * self.diametermm * math.sin(2 * (n + 1) * self.stitchheight / self.diametermm)+self.stitchsetback) / self.stitchlength) > nos[n - 1] + nos[0]:  # no triple increases in the second row
                     nos.append(nos[n - 1] + nos[0])
                 else:
                     nos.append(round(
                         (math.pi * self.diametermm * math.sin(2 * (n + 1) * self.stitchheight / self.diametermm)+self.stitchsetback) / self.stitchlength))
-            else: #northern hemisphere
-                nos.append(nos[self.numberofrows-n-1])
-        self.numberofstitches= nos
-
-    def calculatesetback(self):
-        sumdegsetback=[]
-        deg=[]
-        rad=[]
-        for n in range(0, self.numberofrows):
-            if n < math.floor((self.numberofrows - 1) / 2) + 1:
-                rad.append(self.r*math.sin((n+1)*self.stitchheight/self.r))
-            else:
-                rad.append(self.r * math.sin(math.pi-(n + 1) * self.stitchheight / self.r))
-            deg.append(360+self.stitchsetback/(math.pi*rad[n])*180)
+            else: # northern hemisphere
+                #rad.append(self.r * math.sin(math.pi-(n + 1) * self.stitchheight / self.r))
+                rad.append(rad[self.numberofrows - n - 1])
+                nos.append(nos[self.numberofrows - n - 1])
+            self.deg.append(self.stitchsetback/(math.pi*rad[n])*180+360)
             if n==0:
-                sumdegsetback.append(deg[n])
+                self.sumdegsetback.append(self.deg[n])
             else:
-                sumdegsetback.append(deg[n]+sumdegsetback[n-1])
-        self.deg=deg
+                self.sumdegsetback.append((self.deg[n]+self.sumdegsetback[n-1])%360)
         self.rad=rad
-        self.sumdegsetback=sumdegsetback
+        self.numberofstitches=nos
 
     def coordinates(self) -> list[list[tuple[float,float]]]:
         co=[]
@@ -208,7 +205,13 @@ class StitchCoordinates:
                 h.extend([0] * (dist[n]))
             #print("n=",n)
             #print(h)
-            shift=math.floor(2*self.numberofstitches[n]/5)
+            shift=0
+            if n%3==0:
+                shift=0
+            elif n%3==1:
+                shift=math.floor(dist[n]/3)
+            elif n%3==2:
+                shift=math.floor(2*dist[n]/3)
             h=h[-shift:] + h[:-shift]
             #print(h)
             ds.append(h)
@@ -219,48 +222,81 @@ class PatternGenerator:
     def __init__(self, loader, stitch_coordinates):
         self.loader = loader
         self.st = stitch_coordinates
-        dlat = min(3, (22.5 / math.pi) * stitch_coordinates.stitchheight / stitch_coordinates.r)
-        dlon = min(3, (22.5 / math.pi) * stitch_coordinates.stitchlength / stitch_coordinates.r)
-        farb = self.loader.lookup_majority_batch_nested(self.st.coordinates(), dlon, dlat,10)
-        self.info = [[] for _ in range(self.st.numberofrows)]
+        dlat = min(3, (90 / math.pi) * stitch_coordinates.stitchheight / stitch_coordinates.r)
+        dlon = min(3, (90 / math.pi) * stitch_coordinates.stitchlength / stitch_coordinates.r)
+        self.farb = self.loader.lookup_list_majority_batch_nested(self.st.coordinates(), dlon, dlat,10)
+
+    def info_globe(self):
+        info = [[] for _ in range(self.st.numberofrows)]
         for n in range(len(self.st.doublestitches())):
-            x=[]
+            x = []
+            h = 0
+            for i in range(len(self.st.doublestitches()[n])):
+                if self.st.doublestitches()[n][i] <= 0:
+                    # self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
+                    info[n].append([self.st.doublestitches()[n][i], colorword(self.farb[n][h])])
+                    h += 1
+                elif self.st.doublestitches()[n][i] == 1:
+                    info[n].append([self.st.doublestitches()[n][i], colorword(self.farb[n][h]),colorword(self.farb[n][h + 1])])
+                    h += 2
+        return info
+
+    def info_southern_hemisphere(self):
+        info = [[] for _ in range(self.st.equator+1)]
+        for n in range(self.st.equator+1):
+            h = 0
+            for i in range(len(self.st.doublestitches()[n])):
+                if self.st.doublestitches()[n][i] <= 0:
+                    # self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
+                    info[n].append([self.st.doublestitches()[n][i], colorword(self.farb[n][h])])
+                    h += 1
+                elif self.st.doublestitches()[n][i] == 1:
+                    info[n].append([self.st.doublestitches()[n][i], colorword(self.farb[n][h]),colorword(self.farb[n][h + 1])])
+                    h += 2
+        return info
+
+    def info_northern_hemisphere(self):
+        info = [[] for _ in range(self.st.numberofrows-self.st.equator-1)]
+        for n in range(self.st.numberofrows-self.st.equator-1):
             h=0
             for i in range(len(self.st.doublestitches()[n])):
                 if self.st.doublestitches()[n][i] <= 0:
-                    #self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
-                    self.info[n].append([self.st.doublestitches()[n][i], colorword(farb[n][h])])
-                    h+=1
-                elif self.st.doublestitches()[n][i]==1:
-                    self.info[n].append([self.st.doublestitches()[n][i], colorword(farb[n][h]),
-                                  colorword(farb[n][h+1])])
-                    h+=2
+                    # self.info[n][i] = [self.info[n][i], colorword(farb[n][i])]
+                    info[n].append([self.st.doublestitches()[n][i], colorword(self.farb[self.st.numberofrows-1-n][self.st.numberofstitches[self.st.numberofrows-1-n]-1-h])])
+                    h += 1
+                elif self.st.doublestitches()[n][i] == 1:
+                    info[n].append(
+                        [self.st.doublestitches()[n][i], colorword(self.farb[self.st.numberofrows-1-n][self.st.numberofstitches[self.st.numberofrows-1-n]-1-h]),
+                        colorword(self.farb[self.st.numberofrows-1-n][self.st.numberofstitches[self.st.numberofrows-1-n]-2-h])])
+                    h += 2
+        return info
 
 
 
+    #def generate(self):
+        #pat = []
+        #for n in range(len(self.info)):colorword(self.farb[self.st.numberofrows-1-n][self.st.numberofstitches[self.st.numberofrows-1-n]-1-h])
+           # w = 1
+           # pat.append([])
+            #for i in range(len(self.info[n]) - 1):
+             #   if self.info[n][i] == self.info[n][i + 1]:
+               #     w = w + 1
+               #     if i == len(self.info[n]) - 2:
+               #         pat[n].append([w, " mal ", *self.info[n][i]])
+               # else:
+                 #   pat[n].append([w, " mal ", *self.info[n][i]])
+                  #  w = 1
+                  #  if i == len(self.info[n]) - 2:
+                   #     pat[n].append([1, " mal ", *self.info[n][i + 1]])
+        #return pat
 
-    def generate(self):
-        pat = []
-        for n in range(len(self.info)):
-            w = 1
-            pat.append([])
-            for i in range(len(self.info[n]) - 1):
-                if self.info[n][i] == self.info[n][i + 1]:
-                    w = w + 1
-                    if i == len(self.info[n]) - 2:
-                        pat[n].append([w, " mal ", *self.info[n][i]])
-                else:
-                    pat[n].append([w, " mal ", *self.info[n][i]])
-                    w = 1
-                    if i == len(self.info[n]) - 2:
-                        pat[n].append([1, " mal ", *self.info[n][i + 1]])
-        return pat
 
     def statistik(self):
         am={"green": 0, "olive":0, "dark gray": 0, "yellow":0, "light gray":0, "white":0, "blue":0, "sand":0, "total":0}
-        for n in range(len(self.info)):
-            for i in range(len(self.info[n])):
-                match self.info[n][i][1]:
+        info=self.info_globe()
+        for n in range(len(info)):
+            for i in range(len(info[n])):
+                match info[n][i][1]:
                     case "green":
                         am["green"] += 1
                     case "olive":
@@ -277,8 +313,8 @@ class PatternGenerator:
                         am["blue"] += 1
                     case "sand":
                         am["sand"] +=1
-                if self.info[n][i][0]==1:
-                    match self.info[n][i][2]:
+                if info[n][i][0]==1:
+                    match info[n][i][2]:
                         case "green":
                             am["green"] += 1
                         case "olive":
@@ -319,6 +355,23 @@ def colorword(n):
     else:
         return 'error'
 
+def clean_list(nlist):
+    pat = []
+    for n in range(len(nlist)):
+        w = 1
+        pat.append([])
+        for i in range(len(nlist[n]) - 1):
+            if nlist[n][i] == nlist[n][i + 1]:
+                w = w + 1
+                if i == len(nlist[n]) - 2:
+                    pat[n].append([w, " mal ", *nlist[n][i]])
+            else:
+                pat[n].append([w, " mal ", *nlist[n][i]])
+                w = 1
+                if i == len(nlist[n]) - 2:
+                    pat[n].append([1, " mal ", *nlist[n][i + 1]])
+    return pat
+
 
 
 # --- FastAPI Setup ---
@@ -336,6 +389,8 @@ origins = [
     "http://127.0.0.1:5173",
     "http://localhost:8001",
     "http://127.0.0.1:8001",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
 ]
 
 app.add_middleware(
@@ -353,6 +408,7 @@ class GenerateRequest(BaseModel):
     diametercm: float
     lengthoftestyarn: float
     amountofteststitches: float
+    kind: str
     #path: str
 
 
@@ -360,7 +416,6 @@ class GenerateRequest(BaseModel):
 def generate(req: GenerateRequest):
     try:
         stitch_coordinates = StitchCoordinates(req.stitchlength, req.stitchheight, req.stitchsetback, req.diametercm)
-        #loader=Loader("C:\\Users\\arian\\OneDrive\\Dokumente\\GitHub\\GlobeCrochetPattern\\Data\\*.tif")
         pattern_generator=PatternGenerator(GLOBAL_LOADER, stitch_coordinates)
         ratio=req.lengthoftestyarn/req.amountofteststitches
         original= pattern_generator.statistik()
@@ -369,13 +424,21 @@ def generate(req: GenerateRequest):
             for color, count in original.items()
         }
 
-        #coords = st.coordinates()
-        #flat = [p for row in coords for p in row]
-        #return {"markers": flat}
-        return {
-            "pattern": pattern_generator.generate(),
-            "statistics": new_stats
-        }
+        if req.kind == "south":
+            return {
+                "pattern": clean_list(pattern_generator.info_southern_hemisphere()),
+                "statistics": new_stats
+            }
+        elif req.kind == "north":
+            return {
+                "pattern": clean_list(pattern_generator.info_northern_hemisphere()),
+                "statistics": new_stats
+            }
+        else:
+            return {
+                "pattern": clean_list(pattern_generator.info_globe()),
+                "statistics": new_stats
+            }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
