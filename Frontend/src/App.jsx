@@ -187,6 +187,63 @@ export default function App() {
         <div className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-7 rounded w-1/2">
           <h3 className="font-semibold mb-2">Instruction</h3>
           <p>
+        
+<ol>
+    <li>
+        Crochet a small test circle, for example starting with 6 single crochet stitches (sc) and increasing by 6 stitches in each round.
+    </li>
+    <li>
+        Measure the dimensions of a single stitch:
+        <ul>
+            <li>Stitch width (mm)</li>
+            <li>Stitch height (mm)</li>
+        </ul>
+    </li>
+    <li>
+        Measure the stitch offset:
+        <ul>
+            <li>Observe how the stitches shift from one round to the next.</li>
+            <li>Measure the resulting offset per round in millimeters.</li>
+        </ul>
+    </li>
+    <li>
+        Determine yarn consumption:
+        <ul>
+            <li>Count the total number of stitches in the test piece.</li>
+            <li>Unravel the circle.</li>
+            <li>Measure the length of yarn used in centimeters.</li>
+        </ul>
+    </li>
+    <li>
+        Choose your preferred globe construction method:
+        <ul>
+            <li>Crochet the entire globe as a single piece and stuff it immediately.</li>
+            <li>Crochet the northern and southern hemispheres separately and join them at the equator.</li>
+        </ul>
+    </li>
+    <li>
+        If you are making a pillow cover, you can connect both hemispheres with a zipper instead of sewing them together permanently.
+    </li>
+    <li>
+        Enter all measured values into the form and click <strong>"GENERATE"</strong>.
+    </li>
+    <li>
+        The application will automatically generate:
+        <ul>
+            <li>The crochet pattern</li>
+            <li>The estimated yarn requirements for each color</li>
+        </ul>
+    </li>
+    <li>
+        Abbreviations:
+        <ul>
+            <li><strong>sc</strong> = single crochet</li>
+            <li><strong>inc</strong> = increase</li>
+            <li><strong>dec</strong> = decrease</li>
+        </ul>
+    </li>
+</ol>
+
             At first crochet a small test circle, eg. start with 6 sc and increase
             6 in each row. Then measure the height and width of each stitch in mm.
             Furthermore, you will notice that the stiches do not sit exactly on
