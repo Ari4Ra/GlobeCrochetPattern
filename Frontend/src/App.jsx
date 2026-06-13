@@ -188,73 +188,36 @@ export default function App() {
           <h3 className="font-semibold mb-2">Instruction</h3>
           <p>
         
-<ol>
-    <li>
-        Crochet a small test circle, for example starting with 6 single crochet stitches (sc) and increasing by 6 stitches in each round.
-    </li>
-    <li>
-        Measure the dimensions of a single stitch:
-        <ul>
-            <li>Stitch width (mm)</li>
-            <li>Stitch height (mm)</li>
-        </ul>
-    </li>
-    <li>
-        Measure the stitch offset:
-        <ul>
-            <li>Observe how the stitches shift from one round to the next.</li>
-            <li>Measure the resulting offset per round in millimeters.</li>
-        </ul>
-    </li>
-    <li>
-        Determine yarn consumption:
-        <ul>
-            <li>Count the total number of stitches in the test piece.</li>
-            <li>Unravel the circle.</li>
-            <li>Measure the length of yarn used in centimeters.</li>
-        </ul>
-    </li>
-    <li>
-        Choose your preferred globe construction method:
-        <ul>
-            <li>Crochet the entire globe as a single piece and stuff it immediately.</li>
-            <li>Crochet the northern and southern hemispheres separately and join them at the equator.</li>
-        </ul>
-    </li>
-    <li>
-        If you are making a pillow cover, you can connect both hemispheres with a zipper instead of sewing them together permanently.
-    </li>
-    <li>
-        Enter all measured values into the form and click <strong>"GENERATE"</strong>.
-    </li>
-    <li>
-        The application will automatically generate:
-        <ul>
-            <li>The crochet pattern</li>
-            <li>The estimated yarn requirements for each color</li>
-        </ul>
-    </li>
-    <li>
-        Abbreviations:
-        <ul>
-            <li><strong>sc</strong> = single crochet</li>
-            <li><strong>inc</strong> = increase</li>
-            <li><strong>dec</strong> = decrease</li>
-        </ul>
-    </li>
-</ol>
 
-            At first crochet a small test circle, eg. start with 6 sc and increase
-            6 in each row. Then measure the height and width of each stitch in mm.
-            Furthermore, you will notice that the stiches do not sit exactly on
-            top of each other. Measure the setback that occurs in each row in mm.
-            Count the amount of stitches, unravel and measure the length of the
-            yarn you needed in cm.
-            Also, there are two ways of crocheting the globe. Either the whole globe at once and stuff it immideately,
-            or the northern and southern hemisphere separately and sew them together at the equator. In my case, the
-            globe will be a cover for a pillow, so I will connect them with a zipper. Enter the data and klick "GENERATE". The pattern
-            and the amount of yarn you need of each color will appear. Here "sc"
-            means single crochet, "inc" means increase and "dec" means decrease.
+      <div id="rp8pr0">
+    <p><strong>Step 1:</strong></p>
+    <ul>
+        <li>Crochet a small test circle, for example starting with 6 sc and increasing by 6 stitches in each round. Measure the width and the height of a single stitch (mm). Observe how the stitches shift from one round to the next. Measure also the resulting offset per round (mm).</li>
+    </ul>
+
+    <p><strong>Step 2 (Optional):</strong></p>
+    <ul>
+        <li>To obtain an estimate on the expected yarn consumption, count the total number of stitches and unravel the test piece. Measure the length of yarn used (cm).</li>
+    </ul>
+    
+    <p><strong>Step 3:</strong></p>
+    <ul>
+        <li>Select whether you want to crochet the whole globe at once or the northern and southern hemisphere separately. Enter all measurements and click <strong>"GENERATE"</strong>. Depending on the selected size, it may take a few minutes until the crochet pattern and the expected yarn consumption will appear. Note that color changes also require yarn and thus expect a higher yarn consumption depending on the resolution of the globe.</li>
+    </ul>
+
+    <p><strong>Step 4:</strong></p>
+    <ul>
+        <li>Either crochet the entire globe as a single piece and stuff it immediately or or crochet the northern and southern hemispheres separately and join them at the equator. If the globe is used as a pillow case, you may use a red zipper to mark the equator.</li>
+    </ul>
+
+
+    <p><strong>Abbreviations:</strong></p>
+    <ul>
+        <li><strong>sc</strong> = single crochet, <strong>inc</strong> = increase, <strong>dec</strong> = decrease</li>
+    </ul>
+</div>
+
+           
           </p>
         </div>
 
