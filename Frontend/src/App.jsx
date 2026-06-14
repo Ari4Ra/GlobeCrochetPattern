@@ -167,24 +167,9 @@ export default function App() {
       <h1 className="text-5xl font-bold mb-6 text-center">
         🌍Crochet Pattern Generator: Globe🌍
       </h1>
-
-      <div className="flex flex-col md:flex-row md:items-start gap-6 pt-15"> {/*oberer abschnitt*/}
-
-        {/* Parameter Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-1/2 pr-10">
-          {Object.entries(parameterConfig).map(([key, config]) => (
-            <ParameterInput
-              key={key}
-              name={key}
-              value={params[key]}
-              config={config}
-              onChange={updateParam}
-            />
-          ))}
-        </div>
-
-        {/* Instructions box */}
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-7 rounded w-1/2">
+      
+      {/* Instructions box */}
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-7 rounded w-1/1">
           <h3 className="font-semibold mb-2">Instruction</h3>
           <p>
         
@@ -220,11 +205,35 @@ export default function App() {
            
           </p>
         </div>
+      
 
-      </div>
+      <div className="flex flex-col md:flex-row md:items-start gap-6 pt-15"> {/*unterer abschnitt*/}
 
-        <div className="flex justify-center items-center mt-5 ">
-      <div className="flex justify-center mt-5 w-1/2">
+        {/* Parameter Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 pr-10">
+          {Object.entries(parameterConfig).map(([key, config]) => (
+            <ParameterInput
+              key={key}
+              name={key}
+              value={params[key]}
+              config={config}
+              onChange={updateParam}
+            />
+          ))}
+          <button
+          onClick={run}
+          className="w-full px-4 py-2 bg-red-900 text-white rounded hover:bg-red-400 transition-colors"
+        >
+          GENERATE
+        </button>
+        </div>
+
+        
+
+      
+
+       {/* <div className="flex justify-center items-center mt-5 ">
+      <div className="flex justify-center mt-5 w-1/3">
         <button
           onClick={run}
           className="px-10 py-6 bg-red-900 text-white rounded hover:bg-red-400 transition-colors"
@@ -233,13 +242,13 @@ export default function App() {
         </button>
       </div>
 
-
+</div>*/}
 
       {markers.length === 0 ? (
-        <p className="text-gray-600 mt-2 text-center w-1/2">No Data.</p>
+        <p className="text-gray-600 text-center flex-1">No Data.</p>
       ) : (
-        <div className="mt-4 flex flex-col items-center gap-4 w-1/2">
-          <h2 className="text-2xl font-semibold mt-8 text-center">Pattern</h2>
+        <div className="flex flex-col items-center gap-4 flex-1">
+          <h2 className="text-2xl font-semibold text-center">Pattern</h2>
           <div className="flex items-center gap-4 w-full max-w-xxl">
 
             <button
@@ -250,7 +259,7 @@ export default function App() {
               ←
             </button>
 
-            <pre className="bg-white p-4 rounded max-h-72 overflow-auto whitespace-pre-wrap flex-grow shadow">
+            <pre className="bg-white p-4 rounded overflow-auto whitespace-pre-wrap flex-grow shadow">
               {formatMarker(current).map((line, i) => {
                 let color = "black";
                 if (line.includes("blue")) color = "#4778ba";
@@ -284,9 +293,11 @@ export default function App() {
 
         </div>
       )}
-</div>
-      <div className="pt-20">
-      <table className="w-full text-sm mt-8">
+
+
+
+      <div className="flex-1">
+      <table className="text-sm w-full">
         <thead>
           <tr>
             <th className="text-left border-b pb-1">Color</th>
@@ -305,6 +316,7 @@ export default function App() {
         </tbody>
       </table>
   </div>
+    </div>
     </div>
   );
 }
