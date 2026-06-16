@@ -16,6 +16,6 @@ This tool generates a crochet pattern for a globe of any desired diameter and an
 - `inc` = increase
 - `dec` = decrease
 
-##Demo
+## Demo
 ![Screenshot](images/screenshot.png)
 ![Screenshot](images/process.png)
