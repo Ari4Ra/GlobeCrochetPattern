@@ -22,7 +22,7 @@ Output:
 Process of crocheting:
 ![Screenshot](images/process.jpeg)
 
-##Documentation
+## Documentation
 
 - **class Loader**. Input: paths of datasets, creates list of datasets (dss) and list of bounds the covered rectangle (bounds) 
 - **lookup**. Input: coordinates of one point, Output: value of the nearest point of the dataset (in our case values from 1 to 20 encoding landscape geodata) 
