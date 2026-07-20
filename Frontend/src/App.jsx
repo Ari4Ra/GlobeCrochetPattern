@@ -171,7 +171,7 @@ export default function App() {
       {/* Instructions box */}
         <div className="bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 p-7 rounded w-1/1">
           <h3 className="font-semibold mb-2">Instruction</h3>
-          <p>
+
         
 
       <div id="rp8pr0">
@@ -203,7 +203,7 @@ export default function App() {
 </div>
 
            
-          </p>
+
         </div>
       
 
