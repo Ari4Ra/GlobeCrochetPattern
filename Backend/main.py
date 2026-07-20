@@ -4,11 +4,6 @@ from pyproj import Transformer
 import xarray as xr
 import glob
 import math
-from fastapi.middleware.cors import CORSMiddleware
-import rasterio
-from rasterio.windows import from_bounds, Window, WindowError
-from collections import Counter
-import numba
 import numpy as np
 from rasterio.transform import rowcol
 import os
