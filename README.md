@@ -1,8 +1,3 @@
-<video width="640" controls>
-  <source src="Video.mp4" type="video/mp4">
-  Dein Browser unterstützt keine Videowiedergabe.
-</video>
-
 # Crochet Globe Generator
 
 This tool generates a crochet pattern for a globe of any desired diameter and any type of stitch. 
