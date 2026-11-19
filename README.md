@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/154dcdff-e086-48b0-ac76-41d47a60a8d2
+
 # Crochet Globe Generator
 
 This tool generates a crochet pattern for a globe of any desired diameter and any type of stitch. 
